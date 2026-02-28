@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Переводчик</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="container">
+        <h1 class="title">Переводчик</h1>
+
+        <div class="translator">
+            <div class="header">
+                <div class="lang-name" id="left-label">Цифропись</div>
+                <button class="swap-btn" id="swap-btn" title="Поменять местами">⇄</button>
+                <div class="lang-name" id="right-label">Человеческий</div>
+            </div>
+            <div class="panels">
+                <div class="panel">
+                    <span class="watermark" id="left-wm">Цифропись</span>
+                    <textarea id="input" spellcheck="false"></textarea>
+                </div>
+                <div class="divider"></div>
+                <div class="panel panel-output">
+                    <span class="watermark" id="right-wm">Человеческий</span>
+                    <textarea id="output" readonly></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div class="status" id="status">Загрузка словаря…</div>
+    </div>
+
+<script>
+/* ──── состояние ──── */
+let direction  = 'ltr';          // ltr = цифропись→человеческий
+let c2h        = new Map();      // cipher  → human
+let h2c        = new Map();      // human   → cipher
+let maxCLen    = 0;              // макс. длина фразы (в словах) — cipher
+let maxHLen    = 0;              // то же — human
+let rotation   = 0;              // для анимации кнопки
+
+/* ──── DOM ──── */
+const inputEl  = document.getElementById('input');
+const outputEl = document.getElementById('output');
+const leftLbl  = document.getElementById('left-label');
+const rightLbl = document.getElementById('right-label');
+const leftWm   = document.getElementById('left-wm');
+const rightWm  = document.getElementById('right-wm');
+const swapBtn  = document.getElementById('swap-btn');
+const statusEl = document.getElementById('status');
+
+/* ──── загрузка словаря ──── */
+async function loadDict() {
+    try {
+        const r = await fetch('translation.txt');
+        if (!r.ok) throw new Error(r.status);
+        parseDict(await r.text());
+        statusEl.textContent = 'Словарь загружен: ' + c2h.size + ' записей';
+        setTimeout(() => statusEl.style.opacity = '0', 2500);
+    } catch (e) {
+        statusEl.textContent = '⚠ Не удалось загрузить translation.txt';
+        statusEl.style.color = '#ff6b6b';
+    }
+}
+
+function parseDict(raw) {
+    c2h.clear(); h2c.clear();
+    maxCLen = 0;  maxHLen = 0;
+
+    for (const line of raw.split('\n')) {
+        const t = line.trim();
+        if (!t || t.startsWith('#')) continue;
+
+        const eq = t.indexOf('=');
+        if (eq === -1) continue;
+
+        const L = t.substring(0, eq).trim();
+        const R = t.substring(eq + 1).trim();
+        if (!L || !R) continue;
+
+        const lk = L.toLowerCase();
+        const rk = R.toLowerCase();
+
+        c2h.set(lk, R);
+        h2c.set(rk, L);
+
+        maxCLen = Math.max(maxCLen, lk.split(/\s+/).length);
+        maxHLen = Math.max(maxHLen, rk.split(/\s+/).length);
+    }
+}
+
+/* ──── перевод (жадный поиск самой длинной фразы) ──── */
+function translate(text, dict, maxLen) {
+    return text.split('\n').map(l => transLine(l, dict, maxLen)).join('\n');
+}
+
+function transLine(line, dict, maxLen) {
+    const words = line.split(/\s+/).filter(Boolean);
+    if (!words.length) return '';
+
+    const out = [];
+    let i = 0;
+
+    while (i < words.length) {
+        let matched = false;
+        const end = Math.min(i + maxLen, words.length);
+
+        for (let j = end; j > i; j--) {
+            const key = words.slice(i, j).join(' ').toLowerCase();
+            if (dict.has(key)) {
+                out.push(dict.get(key));
+                i = j;
+                matched = true;
+                break;
+            }
+        }
+        if (!matched) { out.push(words[i]); i++; }
+    }
+    return out.join(' ');
+}
+
+/* ──── обновление UI ──── */
+function doTranslate() {
+    const dict   = direction === 'ltr' ? c2h : h2c;
+    const maxLen = direction === 'ltr' ? maxCLen : maxHLen;
+    outputEl.value = translate(inputEl.value, dict, maxLen);
+    updateWm();
+}
+
+function updateWm() {
+    leftWm.style.opacity  = inputEl.value  ? '0' : '1';
+    rightWm.style.opacity = outputEl.value ? '0' : '1';
+}
+
+function swap() {
+    const prev = outputEl.value;
+    direction = direction === 'ltr' ? 'rtl' : 'ltr';
+
+    const isLtr = direction === 'ltr';
+    leftLbl.textContent = isLtr ? 'Цифропись'   : 'Человеческий';
+    rightLbl.textContent= isLtr ? 'Человеческий' : 'Цифропись';
+    leftWm.textContent  = leftLbl.textContent;
+    rightWm.textContent = rightLbl.textContent;
+
+    inputEl.value = prev;
+    doTranslate();
+
+    rotation += 180;
+    swapBtn.style.transform = 'rotate(' + rotation + 'deg)';
+}
+
+/* ──── события ──── */
+inputEl.addEventListener('input', doTranslate);
+swapBtn.addEventListener('click', swap);
+
+/* ──── старт ──── */
+loadDict();
+updateWm();
+</script>
+</body>
+</html>
