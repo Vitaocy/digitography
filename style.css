@@ -1,8 +1,4 @@
-* {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-}
+* { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -14,10 +10,7 @@ body {
 }
 
 /* ─── контейнер ─── */
-.container {
-    max-width: 960px;
-    width: 100%;
-}
+.container { max-width: 960px; width: 100%; }
 
 .title {
     text-align: center;
@@ -58,8 +51,7 @@ body {
 
 /* ─── кнопка swap ─── */
 .swap-btn {
-    width: 46px;
-    height: 46px;
+    width: 46px; height: 46px;
     flex-shrink: 0;
     border: 2px solid #e4e6eb;
     border-radius: 50%;
@@ -90,9 +82,7 @@ body {
     display: flex;
 }
 
-.panel-output {
-    background: #f9faff;
-}
+.panel-output { background: #f9faff; }
 
 .divider {
     width: 1px;
@@ -115,7 +105,7 @@ body {
     transition: opacity .25s;
 }
 
-/* ─── текстовые поля ─── */
+/* ─── ввод ─── */
 textarea {
     width: 100%;
     border: none;
@@ -131,10 +121,98 @@ textarea {
     z-index: 1;
 }
 
-textarea#output {
-    cursor: default;
+/* ─── вывод (div) ─── */
+.output-area {
+    width: 100%;
+    padding: 22px 24px;
+    font-size: 20px;
+    font-family: inherit;
+    line-height: 1.55;
     color: #333;
+    overflow-y: auto;
+    word-wrap: break-word;
+    white-space: pre-wrap;
+    position: relative;
+    z-index: 1;
+    user-select: text;
 }
+
+/* ─── непереведённое слово ─── */
+.typo {
+    text-decoration: underline wavy #e74c3c;
+    text-decoration-thickness: 1.5px;
+    text-underline-offset: 4px;
+    cursor: pointer;
+    color: #c0392b;
+    border-radius: 3px;
+    padding: 1px 3px;
+    margin: 0 -3px;
+    transition: background .15s;
+}
+.typo:hover {
+    background: rgba(231, 76, 60, .1);
+}
+
+/* ═══════ popup ═══════ */
+.popup {
+    position: fixed;
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 8px 36px rgba(0,0,0,.2), 0 0 0 1px rgba(0,0,0,.05);
+    padding: 10px 0;
+    min-width: 220px;
+    max-width: 340px;
+    z-index: 9999;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-4px);
+    transition: opacity .18s, transform .18s, visibility .18s;
+    pointer-events: none;
+}
+.popup.visible {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
+.popup-header {
+    padding: 6px 16px 8px;
+    font-size: 11px;
+    color: #999;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .6px;
+}
+
+.popup-empty {
+    padding: 12px 16px;
+    font-size: 13px;
+    color: #aaa;
+    text-align: center;
+}
+
+.popup-item {
+    padding: 9px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 15px;
+    transition: background .12s;
+}
+.popup-item:hover { background: #f0f4ff; }
+
+.popup-key {
+    font-weight: 700;
+    color: #4a6cf7;
+}
+.popup-arrow {
+    color: #ccc;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+.popup-val { color: #333; }
 
 /* ─── статус ─── */
 .status {
@@ -145,15 +223,13 @@ textarea#output {
     transition: opacity .6s;
 }
 
-/* ─── мобильная версия ─── */
+/* ─── мобилка ─── */
 @media (max-width: 640px) {
     body { padding: 36px 10px 24px; }
     .title { font-size: 24px; margin-bottom: 20px; }
-
     .panels { flex-direction: column; }
     .divider { width: 100%; height: 1px; }
-    .panel   { min-height: 170px; }
-
+    .panel { min-height: 170px; }
     .watermark { font-size: 28px; }
-    textarea   { font-size: 18px; padding: 18px 16px; }
+    textarea, .output-area { font-size: 18px; padding: 18px 16px; }
 }

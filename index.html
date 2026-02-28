@@ -8,41 +8,44 @@
 </head>
 <body>
 
-    <div class="container">
-        <h1 class="title">Переводчик</h1>
+<div class="container">
+    <h1 class="title">Переводчик</h1>
 
-        <div class="translator">
-            <div class="header">
-                <div class="lang-name" id="left-label">Цифропись</div>
-                <button class="swap-btn" id="swap-btn" title="Поменять местами">⇄</button>
-                <div class="lang-name" id="right-label">Человеческий</div>
+    <div class="translator">
+        <div class="header">
+            <div class="lang-name" id="left-label">Цифропись</div>
+            <button class="swap-btn" id="swap-btn" title="Поменять местами">⇄</button>
+            <div class="lang-name" id="right-label">Человеческий</div>
+        </div>
+        <div class="panels">
+            <div class="panel">
+                <span class="watermark" id="left-wm">Цифропись</span>
+                <textarea id="input" spellcheck="false"></textarea>
             </div>
-            <div class="panels">
-                <div class="panel">
-                    <span class="watermark" id="left-wm">Цифропись</span>
-                    <textarea id="input" spellcheck="false"></textarea>
-                </div>
-                <div class="divider"></div>
-                <div class="panel panel-output">
-                    <span class="watermark" id="right-wm">Человеческий</span>
-                    <textarea id="output" readonly></textarea>
-                </div>
+            <div class="divider"></div>
+            <div class="panel panel-output">
+                <span class="watermark" id="right-wm">Человеческий</span>
+                <div class="output-area" id="output"></div>
             </div>
         </div>
-
-        <div class="status" id="status">Загрузка словаря…</div>
     </div>
 
-<script>
-/* ──── состояние ──── */
-let direction  = 'ltr';          // ltr = цифропись→человеческий
-let c2h        = new Map();      // cipher  → human
-let h2c        = new Map();      // human   → cipher
-let maxCLen    = 0;              // макс. длина фразы (в словах) — cipher
-let maxHLen    = 0;              // то же — human
-let rotation   = 0;              // для анимации кнопки
+    <div class="status" id="status">Загрузка словаря…</div>
+</div>
 
-/* ──── DOM ──── */
+<!-- всплывающее окно подсказок -->
+<div class="popup" id="popup"></div>
+
+<script>
+/* ═══════ состояние ═══════ */
+let direction = 'ltr';
+let c2h = new Map();
+let h2c = new Map();
+let maxCLen = 0;
+let maxHLen = 0;
+let rotation = 0;
+
+/* ═══════ DOM ═══════ */
 const inputEl  = document.getElementById('input');
 const outputEl = document.getElementById('output');
 const leftLbl  = document.getElementById('left-label');
@@ -51,8 +54,9 @@ const leftWm   = document.getElementById('left-wm');
 const rightWm  = document.getElementById('right-wm');
 const swapBtn  = document.getElementById('swap-btn');
 const statusEl = document.getElementById('status');
+const popup    = document.getElementById('popup');
 
-/* ──── загрузка словаря ──── */
+/* ═══════ загрузка словаря ═══════ */
 async function loadDict() {
     try {
         const r = await fetch('translation.txt');
@@ -68,33 +72,72 @@ async function loadDict() {
 
 function parseDict(raw) {
     c2h.clear(); h2c.clear();
-    maxCLen = 0;  maxHLen = 0;
+    maxCLen = 0; maxHLen = 0;
 
     for (const line of raw.split('\n')) {
         const t = line.trim();
         if (!t || t.startsWith('#')) continue;
-
         const sep = t.indexOf(' - ');
         if (sep === -1) continue;
         const L = t.substring(0, sep).trim();
         const R = t.substring(sep + 3).trim();
-
         if (!L || !R) continue;
 
-        const lk = L.toLowerCase();
-        const rk = R.toLowerCase();
-
-        c2h.set(lk, R);
-        h2c.set(rk, L);
-
-        maxCLen = Math.max(maxCLen, lk.split(/\s+/).length);
-        maxHLen = Math.max(maxHLen, rk.split(/\s+/).length);
+        c2h.set(L.toLowerCase(), R);
+        h2c.set(R.toLowerCase(), L);
+        maxCLen = Math.max(maxCLen, L.split(/\s+/).length);
+        maxHLen = Math.max(maxHLen, R.split(/\s+/).length);
     }
 }
 
-/* ──── перевод (жадный поиск самой длинной фразы) ──── */
-function translate(text, dict, maxLen) {
-    return text.split('\n').map(l => transLine(l, dict, maxLen)).join('\n');
+/* ═══════ Левенштейн ═══════ */
+function lev(a, b) {
+    const m = a.length, n = b.length;
+    if (!m) return n;
+    if (!n) return m;
+    const d = [];
+    for (let i = 0; i <= m; i++) {
+        d[i] = [i];
+        for (let j = 1; j <= n; j++) {
+            if (i === 0) { d[0][j] = j; continue; }
+            d[i][j] = Math.min(
+                d[i-1][j] + 1,
+                d[i][j-1] + 1,
+                d[i-1][j-1] + (a[i-1] !== b[j-1] ? 1 : 0)
+            );
+        }
+    }
+    return d[m][n];
+}
+
+/* ═══════ поиск похожих ═══════ */
+function findSuggestions(word, dict, max = 3) {
+    const wl = word.toLowerCase();
+    const threshold = Math.max(1, Math.ceil(wl.length * 0.5));
+    const results = [];
+
+    for (const [key, val] of dict) {
+        if (key === wl) continue;
+        const d = lev(wl, key);
+        if (d <= threshold) results.push({ key, val, dist: d });
+    }
+
+    results.sort((a, b) => a.dist - b.dist);
+    return results.slice(0, max);
+}
+
+/* ═══════ escape HTML ═══════ */
+function esc(s) {
+    return s.replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+}
+
+/* ═══════ перевод → HTML ═══════ */
+function translateHtml(text, dict, maxLen) {
+    if (!text) return '';
+    return text.split('\n').map(l => transLine(l, dict, maxLen)).join('<br>');
 }
 
 function transLine(line, dict, maxLen) {
@@ -111,54 +154,141 @@ function transLine(line, dict, maxLen) {
         for (let j = end; j > i; j--) {
             const key = words.slice(i, j).join(' ').toLowerCase();
             if (dict.has(key)) {
-                out.push(dict.get(key));
+                out.push(esc(dict.get(key)));
                 i = j;
                 matched = true;
                 break;
             }
         }
-        if (!matched) { out.push(words[i]); i++; }
+
+        if (!matched) {
+            const w = words[i];
+            // всегда оборачиваем непереведённое слово
+            out.push('<span class="typo" data-word="' + esc(w) + '">' + esc(w) + '</span>');
+            i++;
+        }
     }
     return out.join(' ');
 }
 
-/* ──── обновление UI ──── */
+/* ═══════ обновление UI ═══════ */
 function doTranslate() {
     const dict   = direction === 'ltr' ? c2h : h2c;
     const maxLen = direction === 'ltr' ? maxCLen : maxHLen;
-    outputEl.value = translate(inputEl.value, dict, maxLen);
+    outputEl.innerHTML = translateHtml(inputEl.value, dict, maxLen);
     updateWm();
+    hidePopup();
 }
 
 function updateWm() {
-    leftWm.style.opacity  = inputEl.value  ? '0' : '1';
-    rightWm.style.opacity = outputEl.value ? '0' : '1';
+    leftWm.style.opacity  = inputEl.value ? '0' : '1';
+    rightWm.style.opacity = outputEl.textContent.trim() ? '0' : '1';
 }
 
+/* ═══════ swap ═══════ */
 function swap() {
-    const prev = outputEl.value;
+    const prevText = outputEl.textContent;
     direction = direction === 'ltr' ? 'rtl' : 'ltr';
 
     const isLtr = direction === 'ltr';
-    leftLbl.textContent = isLtr ? 'Цифропись'   : 'Человеческий';
-    rightLbl.textContent= isLtr ? 'Человеческий' : 'Цифропись';
-    leftWm.textContent  = leftLbl.textContent;
-    rightWm.textContent = rightLbl.textContent;
+    leftLbl.textContent  = isLtr ? 'Цифропись'   : 'Человеческий';
+    rightLbl.textContent = isLtr ? 'Человеческий' : 'Цифропись';
+    leftWm.textContent   = leftLbl.textContent;
+    rightWm.textContent  = rightLbl.textContent;
 
-    inputEl.value = prev;
+    inputEl.value = prevText;
     doTranslate();
 
     rotation += 180;
     swapBtn.style.transform = 'rotate(' + rotation + 'deg)';
 }
 
-/* ──── события ──── */
+/* ═══════ popup ═══════ */
+function showPopup(span) {
+    const word = span.dataset.word;
+    const dict = direction === 'ltr' ? c2h : h2c;
+    const sugs = findSuggestions(word, dict);
+
+    if (!sugs.length) {
+        popup.innerHTML = '<div class="popup-empty">Похожих слов не найдено</div>';
+    } else {
+        popup.innerHTML =
+            '<div class="popup-header">Возможно, вы имели в виду:</div>' +
+            sugs.map(s =>
+                '<div class="popup-item" data-from="' + esc(word) + '" data-to="' + esc(s.key) + '">' +
+                    '<span class="popup-key">' + esc(s.key) + '</span>' +
+                    '<span class="popup-arrow">→</span>' +
+                    '<span class="popup-val">' + esc(s.val) + '</span>' +
+                '</div>'
+            ).join('');
+    }
+
+    const rect = span.getBoundingClientRect();
+    let left = rect.left;
+    let top  = rect.bottom + 8;
+
+    /* не вылезаем за правый край */
+    if (left + 280 > window.innerWidth) left = window.innerWidth - 290;
+    if (left < 8) left = 8;
+
+    /* если внизу нет места — показываем сверху */
+    if (top + 160 > window.innerHeight) top = rect.top - 8 - 120;
+
+    popup.style.left = left + 'px';
+    popup.style.top  = top  + 'px';
+    popup.classList.add('visible');
+}
+
+function hidePopup() {
+    popup.classList.remove('visible');
+}
+
+/* ═══════ события ═══════ */
 inputEl.addEventListener('input', doTranslate);
 swapBtn.addEventListener('click', swap);
 
-/* ──── старт ──── */
+/* клик на подчёркнутое слово → popup */
+outputEl.addEventListener('click', function (e) {
+    const typo = e.target.closest('.typo');
+    if (typo) { e.stopPropagation(); showPopup(typo); }
+});
+
+/* увёл мышку с popup → закрыть */
+popup.addEventListener('mouseleave', hidePopup);
+
+/* клик на подсказку → заменить слово в вводе */
+popup.addEventListener('click', function (e) {
+    const item = e.target.closest('.popup-item');
+    if (!item) return;
+
+    const from = item.dataset.from;
+    const to   = item.dataset.to;
+
+    /* заменяем первое вхождение */
+    const parts = inputEl.value.split(/(\s+)/);
+    for (let k = 0; k < parts.length; k++) {
+        if (parts[k].toLowerCase() === from.toLowerCase()) {
+            parts[k] = to;
+            break;
+        }
+    }
+    inputEl.value = parts.join('');
+    hidePopup();
+    doTranslate();
+});
+
+/* клик мимо → закрыть */
+document.addEventListener('click', function (e) {
+    if (!popup.contains(e.target) && !e.target.closest('.typo')) hidePopup();
+});
+
+/* скролл → закрыть */
+window.addEventListener('scroll', hidePopup, true);
+
+/* ═══════ старт ═══════ */
 loadDict();
 updateWm();
 </script>
+
 </body>
 </html>
